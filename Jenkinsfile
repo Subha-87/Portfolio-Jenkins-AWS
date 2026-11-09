@@ -9,7 +9,7 @@ node {
     stage('Clone Repo'){
         echo 'Cloning the Git Repositories'
         git(
-            branjc:'main',
+            branch:'main',
             url:'https://github.com/Subha-87/Portfolio-Jenkins-AWS'
         )
     }
