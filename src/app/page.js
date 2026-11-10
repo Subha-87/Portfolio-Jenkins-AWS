@@ -6,6 +6,7 @@ export default function Home() {
      <h2 className="text-2xl text-blue-800 font-bold">Welcome to Subhajit Das Portfolio</h2>
      <h4 className="text-red-500">Contact No : 9073362224</h4>
      <h5 className="text-emerald-300">Designation:Assistant Engineer,PWD,Nabanna</h5>
+     <h6>Howrah-711102</h6>
     </div>
   );
 }
