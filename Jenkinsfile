@@ -1,3 +1,8 @@
+properties([
+    pipelineTriggers([
+        githubPush()
+    ])
+])
 
 node {
 
@@ -5,12 +10,12 @@ node {
     def appName = 'subhajit-portfolio'
 
     stage('Clean Workspace') {
-        echo 'Cleaning Jenkins Workspace'
+        echo 'Cleaning Jenkins workspace'
         deleteDir()
     }
 
     stage('Clone Repository') {
-        echo 'Cloning GitHub Repository'
+        echo 'Cloning Portfolio repository'
 
         git(
             branch: 'main',
@@ -19,30 +24,38 @@ node {
     }
 
     stage('Check Environment') {
-        echo 'Checking Node.js and npm'
+        echo 'Checking deployment environment'
 
         sh '''
             set -e
+
+            echo "Node:"
             node -v
+
+            echo "NPM:"
             npm -v
+
+            echo "Git:"
             git --version
-            rsync --version
+
+            echo "PM2:"
             pm2 -v
         '''
     }
 
     stage('Deploy Application') {
 
-        echo 'Deploying Next.js Application'
+        echo 'Deploying Next.js application'
 
         sh """
             set -e
 
-            echo "Preparing deployment directory..."
+            echo "Preparing application directory..."
 
-            mkdir -p ${appDir}
+            sudo mkdir -p ${appDir}
+            sudo chown -R jenkins:jenkins ${appDir}
 
-            echo "Copying project files..."
+            echo "Syncing project files..."
 
             rsync -av --delete \
                 --exclude='.git' \
@@ -62,56 +75,59 @@ node {
 
             echo "Building Next.js application..."
 
-            rm -rf .next
-
             npm run build
 
             echo "Build completed successfully!"
         """
     }
 
-    stage('Restart Application') {
+    stage('Restart Next.js') {
 
-        echo 'Starting or Restarting Next.js with PM2'
+        echo 'Restarting Next.js application with PM2'
 
         sh """
             set -e
 
             cd ${appDir}
 
-            if pm2 describe ${appName} >/dev/null 2>&1; then
+            if pm2 describe ${appName} > /dev/null 2>&1; then
 
-                echo "Restarting existing application..."
+                echo "Existing PM2 process found"
+                echo "Restarting ${appName}"
 
                 pm2 restart ${appName} --update-env
 
             else
 
-                echo "Starting new application..."
+                echo "PM2 process does not exist"
+                echo "Starting ${appName}"
 
-                pm2 start npm --name "${appName}" -- start
-
+                pm2 start npm \
+                    --name "${appName}" \
+                    -- start
             fi
 
             pm2 save
         """
     }
 
-    stage('Deployment Status') {
+    stage('Verify Application') {
+
+        echo 'Verifying Next.js application'
 
         sh """
-            echo "Checking PM2 application status..."
+            sleep 5
 
             pm2 status
 
-            echo "Checking application response..."
+            echo "Testing localhost:3000..."
 
-            sleep 5
+            curl -f http://localhost:3000
 
-            curl -f http://localhost:3000 || exit 1
+            echo ""
+            echo "======================================"
+            echo "DEPLOYMENT SUCCESSFUL"
+            echo "======================================"
         """
-
-        echo 'Next.js Deployment Successful!'
     }
-
 }
