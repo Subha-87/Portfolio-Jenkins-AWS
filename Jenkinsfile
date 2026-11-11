@@ -1,133 +1,57 @@
-properties([
-    pipelineTriggers([
-        githubPush()
-    ])
-])
+pipeline {
+    agent any
 
-node {
-
-    def appDir = '/var/www/subhajit-portfolio-app'
-    def appName = 'subhajit-portfolio'
-
-    stage('Clean Workspace') {
-        echo 'Cleaning Jenkins workspace'
-        deleteDir()
+    environment {
+        CONTAINER_NAME = "portfolio-app"
+        IMAGE_NAME ="portfolio-image:V1"
+        EMAIL ="subhajit87@gmail.com"
+        PORT ="3000"
     }
 
-    stage('Clone Repository') {
-        echo 'Cloning Portfolio repository'
+    stages {
+        stage('Clone Repo'){
+            echo 'Step 1.Cloning Portfolio repository...'
 
-        git(
-            branch: 'main',
-            url: 'https://github.com/Subha-87/Portfolio-Jenkins-AWS.git'
-        )
-    }
+            steps{
+                git branch:'main',url:'https://github.com/Subha-87/Portfolio-Jenkins-AWS.git'
+            }
+        }
+        stage('Building Docker Image'){
 
-    stage('Check Environment') {
-        echo 'Checking deployment environment'
+            echo 'Step 2. Creating of Docker Image...'
+            steps{
+               sh 'docker build -t $IMAGE_NAME .'
+            }
+        }
+        stage('Stop & Remove Previous Container'){
 
-        sh '''
-            set -e
+            echo 'Step 3. Check Previous Container Status...'
+            steps{
+               sh '''
+                  docker stop $CONTAINER_NAME || true
+                  docker rm $CONTAINER_NAME || true
+               '''
+            }
+        }
+        stage('Run Container'){
 
-            echo "Node:"
-            node -v
-
-            echo "NPM:"
-            npm -v
-
-            echo "Git:"
-            git --version
-
-            echo "PM2:"
-            pm2 -v
-        '''
-    }
-
-    stage('Deploy Application') {
-
-        echo 'Deploying Next.js application'
-
-        sh """
-            set -e
-
-            echo "Preparing application directory..."
-
-            sudo mkdir -p ${appDir}
-            sudo chown -R jenkins:jenkins ${appDir}
-
-            echo "Syncing project files..."
-
-            rsync -av --delete \
-                --exclude='.git' \
-                --exclude='node_modules' \
-                --exclude='.next' \
-                ./ ${appDir}/
-
-            cd ${appDir}
-
-            echo "Installing dependencies..."
-
-            if [ -f package-lock.json ]; then
-                npm ci
-            else
-                npm install
-            fi
-
-            echo "Building Next.js application..."
-
-            npm run build
-
-            echo "Build completed successfully!"
-        """
-    }
-
-    stage('Restart Next.js') {
-
-        echo 'Restarting Next.js application with PM2'
-
-        sh """
-            set -e
-
-            cd ${appDir}
-
-            if pm2 describe ${appName} > /dev/null 2>&1; then
-
-                echo "Existing PM2 process found"
-                echo "Restarting ${appName}"
-
-                pm2 restart ${appName} --update-env
-
-            else
-
-                echo "PM2 process does not exist"
-                echo "Starting ${appName}"
-
-                pm2 start npm \
-                    --name "${appName}" \
-                    -- start
-            fi
-
-            pm2 save
-        """
-    }
-
-    stage('Verify Application') {
-
-        echo 'Verifying Next.js application'
-
-        sh """
-            sleep 5
-
-            pm2 status
-
-            echo "Testing localhost:3000..."
-
-            curl -f http://localhost:3000
-
-            echo ""
-            echo "======================================"
-            echo "DEPLOYMENT SUCCESSFUL"
-            echo "======================================"
-        """
+            echo 'Step 4. Prepare to Run Container...'
+            steps{
+               sh '''
+                  docker run -d -p$PORT:$PORT --name $CONTAINER_NAME --$IMAGE_NAME
+                  docker rm $CONTAINER_NAME || true
+               '''
+            }
+        }
+        stage('EMAIL Notification'){
+            echo 'Step 5. Sending Email Notification...'
+            steps{
+                emailext(
+                    subject:"PORTFOLIO APP DEPLOYED Successfull on EC2",
+                    body: "Hooray!! App deplyment is successull on http://52.64.224.163:${PORT}/",
+                    to:"${EMAIL}"
+                )
+            }
+        }
     }
 }
