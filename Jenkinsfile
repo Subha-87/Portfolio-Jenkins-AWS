@@ -1,55 +1,77 @@
+
 pipeline {
     agent any
 
     environment {
         CONTAINER_NAME = "portfolio-app"
-        IMAGE_NAME ="portfolio-image:V1"
-        EMAIL ="subhajit87@gmail.com"
-        PORT ="3000"
+        IMAGE_NAME = "portfolio-image:v1"
+        EMAIL = "subhajit87@gmail.com"
+        PORT = "3000"
     }
 
     stages {
-        stage('Clone Repo'){
-           
 
-            steps{
-                git branch:'main',url:'https://github.com/Subha-87/Portfolio-Jenkins-AWS.git'
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Subha-87/Portfolio-Jenkins-AWS.git'
             }
         }
-        stage('Building Docker Image'){
 
-            
-            steps{
-               sh 'docker build -t $IMAGE_NAME .'
+        stage('Check Docker') {
+            steps {
+                sh '''
+                    docker --version
+                    docker info
+                '''
             }
         }
-        stage('Stop & Remove Previous Container'){
 
-          
-            steps{
-               sh '''
-                  docker stop $CONTAINER_NAME || true
-                  docker rm $CONTAINER_NAME || true
-               '''
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t $IMAGE_NAME .
+                '''
             }
         }
-        stage('Run Container'){
 
-          
-            steps{
-               sh '''
-                  docker run -d -p$PORT:$PORT --name $CONTAINER_NAME --$IMAGE_NAME
-                  docker rm $CONTAINER_NAME || true
-               '''
+        stage('Stop Previous Container') {
+            steps {
+                sh '''
+                    docker stop $CONTAINER_NAME || true
+                    docker rm $CONTAINER_NAME || true
+                '''
             }
         }
-        stage('EMAIL Notification'){
-      
-            steps{
+
+        stage('Run New Container') {
+            steps {
+                sh '''
+                    docker run -d \
+                      --name $CONTAINER_NAME \
+                      --restart unless-stopped \
+                      -p $PORT:3000 \
+                      $IMAGE_NAME
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    sleep 5
+                    docker ps
+                    curl --fail http://localhost:$PORT
+                '''
+            }
+        }
+
+        stage('Email Notification') {
+            steps {
                 emailext(
-                    subject:"PORTFOLIO APP DEPLOYED Successfull on EC2",
-                    body: "Hooray!! App deplyment is successull on http://52.64.224.163:${PORT}/",
-                    to:"${EMAIL}"
+                    subject: "Portfolio App Deployment Successful on EC2",
+                    body: "Your portfolio application is deployed successfully at http://52.64.224.163:${PORT}/",
+                    to: "${EMAIL}"
                 )
             }
         }
